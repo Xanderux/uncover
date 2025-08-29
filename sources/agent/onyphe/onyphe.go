@@ -27,41 +27,41 @@ func (agent *Agent) Name() string {
 }
 
 func (agent *Agent) Query(session *sources.Session, query *sources.Query) (chan sources.Result, error) {
-    if session.Keys.OnypheKey == "" {
-        return nil, errors.New("empty Onyphe API key")
-    }
+	if session.Keys.OnypheKey == "" {
+		return nil, errors.New("empty Onyphe API key")
+	}
 
-    results := make(chan sources.Result)
+	results := make(chan sources.Result)
 
-    go func() {
-        defer close(results)
+	go func() {
+		defer close(results)
 
-        currentPage := 1
-        totalResults := 0
-        maxResults := query.Limit
+		currentPage := 1
+		totalResults := 0
+		maxResults := query.Limit
 
-        for {
-            onypheRequest := &OnypheRequest{
-                Query: query.Query,
-                Page:  currentPage,
-            }
+		for {
+			onypheRequest := &OnypheRequest{
+				Query: query.Query,
+				Page:  currentPage,
+			}
 
-            apiResponse := agent.query(session, *onypheRequest, results)
-            if apiResponse == nil {
-                break
-            }
+			apiResponse := agent.query(session, *onypheRequest, results)
+			if apiResponse == nil {
+				break
+			}
 
-            totalResults += len(apiResponse.Results)
-            if totalResults >= apiResponse.Total ||
-               len(apiResponse.Results) == 0 ||
-               (maxResults > 0 && totalResults >= maxResults) {
-                break
-            }
-            currentPage++
-        }
-    }()
+			totalResults += len(apiResponse.Results)
+			if totalResults >= apiResponse.Total ||
+				len(apiResponse.Results) == 0 ||
+				(maxResults > 0 && totalResults >= maxResults) {
+				break
+			}
+			currentPage++
+		}
+	}()
 
-    return results, nil
+	return results, nil
 }
 
 func (agent *Agent) query(session *sources.Session, onypheRequest OnypheRequest, results chan sources.Result) *OnypheResponse {
@@ -78,25 +78,37 @@ func (agent *Agent) query(session *sources.Session, onypheRequest OnypheRequest,
 		return nil
 	}
 
-    var apiResponse OnypheResponse
-    if err := json.Unmarshal(body, &apiResponse); err != nil {
-        results <- sources.Result{Source: agent.Name(), Error: err}
-        return nil
-    }
+	var apiResponse OnypheResponse
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		results <- sources.Result{Source: agent.Name(), Error: err}
+		return nil
+	}
 
-    // Check if the API returned an error
-    if apiResponse.Error != 0 {
-        results <- sources.Result{Source: agent.Name(), Error: fmt.Errorf("API error code: %d", apiResponse.Error)}
-        return nil
-    }
+	// Check if the API returned an error
+	if apiResponse.Error != 0 {
+		results <- sources.Result{Source: agent.Name(), Error: fmt.Errorf("API error code: %d", apiResponse.Error)}
+		return nil
+	}
 
 	for _, result := range apiResponse.Results {
-		results <- sources.Result{
-			Source: agent.Name(),
-			IP:     result.IP,
-			Port:   result.Port,
+		if len(result.Hosts) == 0 {
+			results <- sources.Result{
+				Source: agent.Name(),
+				IP:     result.IP,
+				Port:   result.Port,
+			}
+		} else {
+			for _, host := range result.Hosts {
+				results <- sources.Result{
+					Source: agent.Name(),
+					IP:     result.IP,
+					Port:   result.Port,
+					Host:   host,
+				}
+			}
 		}
 	}
+
 	return &apiResponse
 }
 

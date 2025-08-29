@@ -9,6 +9,7 @@ type OnypheResponse struct {
 }
 
 type Result struct {
-	IP   string `json:"ip"`
-	Port int    `json:"port"`
+	IP    string   `json:"ip"`
+	Port  int      `json:"port"`
+	Hosts []string `json:"domain"`
 }
